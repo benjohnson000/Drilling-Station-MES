@@ -241,26 +241,30 @@
                         <thead>
                             <tr>
                                 <th>Time</th>
-                                <th>Order ID</th>
                                 <th>Operation</th>
-                                <th>Addr Tag</th>
-                                <th>Length</th>
+                                <th>Pallet ID</th>
+                                <th>Order ID</th>
+                                <th>Task Code</th>
+                                <th>Status</th>
+                                <th>Quality</th>
                                 <th>Raw Data</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for event in recent_rfid_events %}
+                            {% for event in decoded_rfid_events %}
                             <tr>
                                 <td>{{ event.timestamp }}</td>
-                                <td>{{ event.order_id }}</td>
                                 <td>{{ event.operation }}</td>
-                                <td>{{ event.addr_tag }}</td>
-                                <td>{{ event.length }}</td>
+                                <td>{{ event.decoded.pallet_id }}</td>
+                                <td>{{ event.decoded.order_id }}</td>
+                                <td>{{ event.decoded.task_code }}</td>
+                                <td>{{ event.decoded.status_text }}</td>
+                                <td>{{ event.decoded.quality_text }}</td>
                                 <td class="mono">{{ event.raw_data }}</td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6">No RFID events yet.</td>
+                                <td colspan="8">No RFID events yet.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

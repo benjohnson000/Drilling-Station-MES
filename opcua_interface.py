@@ -27,10 +27,10 @@ NODE_RELEASE = 'ns=3;s="abstractMachine"."release"'
 NODE_OPERATING_MODE = 'ns=3;s=OperatingMode'
 
 # RFID TAGS
-NODE_RFID_READ = 'ns=3;s="RFID_control"."read"'
-NODE_RFID_WRITE = 'ns=3;s="RFID_control"."write"'
-NODE_RFID_ADDR_TAG = 'ns=3;s="RFID_control"."addrTag"'
-NODE_RFID_LENGTH = 'ns=3;s="RFID_control"."length"'
+NODE_RFID_READ_EXECUTE = 'ns=3;s="LIOLink_RF200_ReadTag_DB"."execute"'
+NODE_RFID_WRITE_EXECUTE = 'ns=3;s="LIOLink_RF200_WriteTag_DB"."execute"'
+NODE_RFID_ADDR_TAG = 'ns=3;s="rfidControl"."addrTag"'
+NODE_RFID_LENGTH = 'ns=3;s="rfidControl"."length"'
 NODE_RFID_READ_DATA = 'ns=3;s="identData"."readData"'
 NODE_RFID_WRITE_DATA = 'ns=3;s="identData"."writeData"'
 
@@ -213,11 +213,11 @@ class OPCUAInterface:
             return self.sim_state["rfid_data"][:length]
 
         self.configure_rfid(addr_tag, length)
-        self._pulse_bool(NODE_RFID_READ)
+        self._pulse_bool(NODE_RFID_READ_EXECUTE)
         time.sleep(0.5)
 
         data = self._read_node(NODE_RFID_READ_DATA)
-        return list(data)
+        return list(data)[:length]
 
     def write_rfid_tag(self, data: list[int], addr_tag: int = 0) -> None:
         if len(data) > 32:
@@ -231,7 +231,7 @@ class OPCUAInterface:
 
         self.configure_rfid(addr_tag, len(data))
         self._write_byte_array(NODE_RFID_WRITE_DATA, padded_data)
-        self._pulse_bool(NODE_RFID_WRITE)
+        self._pulse_bool(NODE_RFID_WRITE_EXECUTE)
 
     def build_rfid_payload(
         self,
@@ -239,15 +239,57 @@ class OPCUAInterface:
         task_code: int,
         status_code: int = 0,
         quality_code: int = 0,
+        pallet_id: int = 0,
     ) -> list[int]:
         payload = [0] * 32
+
+        # order_id: bytes 0-1
         payload[0] = order_id & 0xFF
         payload[1] = (order_id >> 8) & 0xFF
+
+        # task/status/quality: bytes 2-4
         payload[2] = task_code
         payload[3] = status_code
         payload[4] = quality_code
+
+        # pallet_id: bytes 5-6
+        payload[5] = pallet_id & 0xFF
+        payload[6] = (pallet_id >> 8) & 0xFF
+
         return payload
 
+    def decode_rfid_payload(self, data: list[int]) -> dict[str, int | str]:
+        padded = list(data) + [0] * max(0, 32 - len(data))
+
+        order_id = padded[0] | (padded[1] << 8)
+        task_code = padded[2]
+        status_code = padded[3]
+        quality_code = padded[4]
+        pallet_id = padded[5] | (padded[6] << 8)
+
+        status_text_map = {
+            0: "Unknown",
+            1: "Complete",
+            2: "In Progress",
+            3: "Failed",
+        }
+
+        quality_text_map = {
+            0: "Unknown",
+            1: "Pass",
+            2: "Fail",
+        }
+
+        return {
+            "order_id": order_id,
+            "task_code": task_code,
+            "status_code": status_code,
+            "status_text": status_text_map.get(status_code, f"Code {status_code}"),
+            "quality_code": quality_code,
+            "quality_text": quality_text_map.get(quality_code, f"Code {quality_code}"),
+            "pallet_id": pallet_id,
+        }
+    
 ######################### Simulation Help #########################
 
     def _tick_simulation(self) -> None:

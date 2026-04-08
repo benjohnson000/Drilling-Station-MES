@@ -161,7 +161,19 @@ class MESController:
                 length=len(rfid_data),
                 raw_data=rfid_data,
             )
-            self.db.add_event("rfid_read", f"RFID read for order {order.order_id}: {rfid_data}")
+            decoded = self.plc.decode_rfid_payload(rfid_data)
+
+            self.db.add_event(
+                "rfid_read",
+                (
+                    f"RFID read for order {order.order_id}: "
+                    f"pallet_id={decoded['pallet_id']}, "
+                    f"tag_order_id={decoded['order_id']}, "
+                    f"task_code={decoded['task_code']}, "
+                    f"status={decoded['status_text']}, "
+                    f"quality={decoded['quality_text']}"
+                ),
+            )
         except Exception as exc:
             self.db.add_event("rfid_read_error", f"RFID read failed: {exc}")
 
@@ -187,11 +199,14 @@ class MESController:
 
         # Write RFID completion data before releasing the pallet
         try:
+            pallet_id = self.current_order_id  # simple prototype choice; can be replaced later
+
             payload = self.plc.build_rfid_payload(
                 order_id=self.current_order_id,
                 task_code=self.current_task_code,
-                status_code=1,   # complete
-                quality_code=1,  # pass
+                status_code=1,
+                quality_code=1,
+                pallet_id=pallet_id,
             )
             self.plc.write_rfid_tag(payload, addr_tag=0)
 
@@ -202,9 +217,18 @@ class MESController:
                 length=len(payload),
                 raw_data=payload,
             )
+            decoded = self.plc.decode_rfid_payload(payload)
+
             self.db.add_event(
                 "rfid_write",
-                f"RFID written for order {self.current_order_id}: {payload[:8]}...",
+                (
+                    f"RFID written for order {self.current_order_id}: "
+                    f"pallet_id={decoded['pallet_id']}, "
+                    f"order_id={decoded['order_id']}, "
+                    f"task_code={decoded['task_code']}, "
+                    f"status={decoded['status_text']}, "
+                    f"quality={decoded['quality_text']}"
+                ),
             )
         except Exception as exc:
             self.db.add_event("rfid_write_error", f"RFID write failed: {exc}")

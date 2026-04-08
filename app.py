@@ -3,7 +3,7 @@ Flask dashboard for the Drilling Station MES prototype.
 
 Algorithm:
 1. Start the database, PLC interface, and MES controller.
-2. Render a dashboard showing KPIs, machine state, and MES activity.
+2. Render a dashboard showing KPIs, machine state, orders, cycles, RFID activity, and recent events.
 3. Allow the user to create manual or random orders from the web UI.
 """
 
@@ -23,7 +23,20 @@ app = Flask(__name__)
 db = MESDatabase("mes_prototype.db")
 plc = OPCUAInterface()
 controller = MESController(db, plc)
-controller.start()
+
+
+def parse_raw_rfid(raw_data: str) -> dict:
+    try:
+        values = [int(x.strip()) for x in raw_data.split(",") if x.strip() != ""]
+        return plc.decode_rfid_payload(values)
+    except Exception:
+        return {
+            "order_id": "-",
+            "task_code": "-",
+            "status_text": "Invalid",
+            "quality_text": "Invalid",
+            "pallet_id": "-",
+        }
 
 
 @atexit.register
@@ -32,6 +45,7 @@ def shutdown() -> None:
         controller.stop()
     except Exception:
         pass
+
     try:
         db.close()
     except Exception:
@@ -48,6 +62,21 @@ def index():
     recent_cycles = db.get_recent_cycles(15)
     recent_rfid_events = db.get_recent_rfid_events(15)
 
+    decoded_rfid_events = []
+    for event in recent_rfid_events:
+        decoded = parse_raw_rfid(event["raw_data"])
+        decoded_rfid_events.append(
+            {
+                "timestamp": event["timestamp"],
+                "order_id": event["order_id"],
+                "operation": event["operation"],
+                "addr_tag": event["addr_tag"],
+                "length": event["length"],
+                "raw_data": event["raw_data"],
+                "decoded": decoded,
+            }
+        )
+
     plc_mode = "Simulation" if plc.simulate else "Physical PLC"
 
     return render_template(
@@ -57,7 +86,7 @@ def index():
         orders=orders,
         recent_events=recent_events,
         recent_cycles=recent_cycles,
-        recent_rfid_events=recent_rfid_events,
+        decoded_rfid_events=decoded_rfid_events,
         plc_mode=plc_mode,
     )
 
@@ -68,7 +97,10 @@ def create_order():
     quantity = int(request.form.get("quantity", "1"))
 
     db.create_order(task_code=task_code, quantity=quantity)
-    db.add_event("order_create", f"Created manual order: task_code={task_code}, quantity={quantity}")
+    db.add_event(
+        "order_create",
+        f"Created manual order: task_code={task_code}, quantity={quantity}",
+    )
 
     return redirect(url_for("index"))
 
@@ -89,4 +121,5 @@ def generate_random_orders():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    controller.start()
+    app.run(debug=False, use_reloader=False, port=5000)
