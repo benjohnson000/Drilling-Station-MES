@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Drilling Station MES</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page">
+        <header class="page-header">
+            <div>
+                <h1>Drilling Station MES Dashboard</h1>
+                <p class="subtitle">
+                    Prototype dashboard for order management, machine state, KPI monitoring, cycle tracking, and RFID activity.
+                </p>
+            </div>
+
+            <form method="get" action="{{ url_for('index') }}">
+                <button type="submit" class="secondary">Refresh Dashboard</button>
+            </form>
+        </header>
+
+        <section class="mode-banner {% if plc_mode == 'Simulation' %}sim{% else %}live{% endif %}">
+            <div>
+                <h2>PLC Connection Mode</h2>
+                <p class="mode-text"><strong>{{ plc_mode }}</strong></p>
+                {% if plc_mode == "Simulation" %}
+                    <p>The dashboard is currently using the built-in simulated PLC.</p>
+                {% else %}
+                    <p>The dashboard is currently connected to the physical PLC.</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="grid kpi-grid">
+            <div class="card kpi-card">
+                <h3>Total Orders</h3>
+                <div class="big">{{ kpis.total_orders }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Completed Orders</h3>
+                <div class="big">{{ kpis.completed_orders }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Open Orders</h3>
+                <div class="big">{{ kpis.open_orders }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Total Parts</h3>
+                <div class="big">{{ kpis.total_parts }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Completed Parts</h3>
+                <div class="big">{{ kpis.completed_parts }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Completed Cycles</h3>
+                <div class="big">{{ kpis.completed_cycles }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Average Cycle Time</h3>
+                <div class="big">
+                    {% if kpis.avg_cycle_seconds is not none %}
+                        {{ kpis.avg_cycle_seconds }} s
+                    {% else %}
+                        No data
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Min Cycle Time</h3>
+                <div class="big">
+                    {% if kpis.min_cycle_seconds is not none %}
+                        {{ kpis.min_cycle_seconds }} s
+                    {% else %}
+                        No data
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Max Cycle Time</h3>
+                <div class="big">
+                    {% if kpis.max_cycle_seconds is not none %}
+                        {{ kpis.max_cycle_seconds }} s
+                    {% else %}
+                        No data
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Downtime Events</h3>
+                <div class="big">{{ kpis.downtime_events }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>RFID Events</h3>
+                <div class="big">{{ kpis.rfid_event_count }}</div>
+            </div>
+
+            <div class="card kpi-card">
+                <h3>Last State Update</h3>
+                <div class="small-text">{{ kpis.last_update }}</div>
+            </div>
+        </section>
+
+        <section class="grid two-column">
+            <div class="card">
+                <h2>Machine State</h2>
+                <table class="info-table">
+                    <tr><th>Current State</th><td>{{ machine_state.state_label }}</td></tr>
+                    <tr><th>PLC Connected</th><td>{{ machine_state.plc_connected }}</td></tr>
+                    <tr><th>Operating Mode</th><td>{{ machine_state.operating_mode }}</td></tr>
+                    <tr><th>Active Order ID</th><td>{{ machine_state.active_order_id }}</td></tr>
+                    <tr><th>Task Code</th><td>{{ machine_state.task_code }}</td></tr>
+                    <tr><th>awaitApp</th><td>{{ machine_state.await_app }}</td></tr>
+                    <tr><th>appRun</th><td>{{ machine_state.app_run }}</td></tr>
+                    <tr><th>appDone</th><td>{{ machine_state.app_done }}</td></tr>
+                    <tr><th>release</th><td>{{ machine_state.release }}</td></tr>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>Create Orders</h2>
+
+                <form method="post" action="{{ url_for('create_order') }}" class="form-block">
+                    <label for="task_code">Task Code</label>
+                    <select id="task_code" name="task_code">
+                        <option value="1">1 - Pattern A</option>
+                        <option value="2">2 - Pattern B</option>
+                        <option value="3">3 - Pattern C</option>
+                    </select>
+
+                    <label for="quantity">Quantity</label>
+                    <input id="quantity" type="number" name="quantity" min="1" value="1">
+
+                    <button type="submit">Create New Order</button>
+                </form>
+
+                <div class="button-row">
+                    <form method="post" action="{{ url_for('create_random_order') }}">
+                        <button type="submit" class="secondary">Create Random Order</button>
+                    </form>
+
+                    <form method="post" action="{{ url_for('generate_random_orders') }}" class="inline-form">
+                        <input type="number" name="count" min="1" value="3">
+                        <button type="submit" class="secondary">Generate Multiple Random Orders</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>All Orders</h2>
+            <p class="table-note">This table shows the full MES order list and the most important information for each order.</p>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Task Code</th>
+                            <th>Quantity</th>
+                            <th>Completed Quantity</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Started At</th>
+                            <th>Completed At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td>{{ order.order_id }}</td>
+                            <td>{{ order.task_code }}</td>
+                            <td>{{ order.quantity }}</td>
+                            <td>{{ order.completed_quantity }}</td>
+                            <td>{{ order.status }}</td>
+                            <td>{{ order.created_at }}</td>
+                            <td>{{ order.started_at or "-" }}</td>
+                            <td>{{ order.completed_at or "-" }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8">No orders found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="grid two-column">
+            <div class="card">
+                <h2>Recent Cycles</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Cycle ID</th>
+                                <th>Order ID</th>
+                                <th>Task Code</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Seconds</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cycle in recent_cycles %}
+                            <tr>
+                                <td>{{ cycle.cycle_id }}</td>
+                                <td>{{ cycle.order_id }}</td>
+                                <td>{{ cycle.task_code }}</td>
+                                <td>{{ cycle.cycle_start }}</td>
+                                <td>{{ cycle.cycle_end }}</td>
+                                <td>{{ cycle.cycle_seconds }}</td>
+                                <td>{{ cycle.result }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7">No completed cycles yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Recent RFID Events</h2>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Order ID</th>
+                                <th>Operation</th>
+                                <th>Addr Tag</th>
+                                <th>Length</th>
+                                <th>Raw Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in recent_rfid_events %}
+                            <tr>
+                                <td>{{ event.timestamp }}</td>
+                                <td>{{ event.order_id }}</td>
+                                <td>{{ event.operation }}</td>
+                                <td>{{ event.addr_tag }}</td>
+                                <td>{{ event.length }}</td>
+                                <td class="mono">{{ event.raw_data }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6">No RFID events yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Recent Machine Events</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in recent_events %}
+                        <tr>
+                            <td>{{ event.timestamp }}</td>
+                            <td>{{ event.event_type }}</td>
+                            <td>{{ event.message }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3">No machine events yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
