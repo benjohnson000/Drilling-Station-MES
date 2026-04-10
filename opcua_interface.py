@@ -15,7 +15,7 @@ from typing import Any
 
 from opcua import Client, ua
 
-SIMULATE_PLC = True # Simulate PLC here to test outside of lab!!
+SIMULATE_PLC = False # Simulate PLC here to test outside of lab!!
 ENDPOINT = "opc.tcp://172.21.3.1:4840"
 
 # PLC CONTROL TAGS
